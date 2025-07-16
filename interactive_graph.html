@@ -1,0 +1,315 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequence Tree Graph (Enhanced)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c;
+            color: #f7fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        h1 {
+            color: #edf2f7;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px 12px;
+            font: 12px 'Inter', sans-serif;
+            background: rgba(26, 32, 44, 0.9);
+            border: 1px solid #4a5568;
+            color: #e2e8f0;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .node circle {
+            cursor: pointer;
+            stroke: #4a5568;
+            stroke-width: 2px;
+            transition: all 0.3s ease;
+        }
+        .node:hover circle {
+            filter: url(#glow);
+        }
+        .node text {
+            font-size: 12px;
+            font-weight: 500;
+            fill: #cbd5e0;
+            paint-order: stroke;
+            stroke: #1a202c;
+            stroke-width: 3px;
+            stroke-linecap: butt;
+            stroke-linejoin: miter;
+        }
+        .link {
+            fill: none;
+            stroke: #4a5568;
+            stroke-opacity: 0.8;
+            stroke-width: 1.5px;
+            transition: all 0.3s ease;
+        }
+        .link-label {
+            font-size: 11px;
+            font-weight: 700;
+            fill: #e53e3e;
+            paint-order: stroke;
+            stroke: #1a202c;
+            stroke-width: 4px;
+        }
+        #controls {
+            margin-top: 20px;
+            background-color: #2d3748;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        #controls label {
+            margin-right: 10px;
+            font-weight: 500;
+            color: #e2e8f0;
+        }
+        #controls button {
+            margin-left: 10px;
+            padding: 8px 16px;
+            border: none;
+            background-color: #4299e1;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #controls button:hover {
+            background-color: #3182ce;
+        }
+    </style>
+</head>
+<body>
+    <h1>Task Sequence Visualization</h1>
+    <div id="graph-container"></div>
+    <div id="controls">
+        <label for="zoom">Zoom:</label>
+        <input type="range" id="zoom" name="zoom" min="0.1" max="3" value="1" step="0.1">
+        <button id="reset-zoom">Reset</button>
+    </div>
+    <div class="tooltip"></div>
+
+    <script>
+        // --- Data (Injected from Python) ---
+        const TITLES = {"0": "Terminal scripting & tutorial browsing", "1": "Terminal interface navigation", "2": "Stop Wireshark capture", "3": "Close browser tabs", "4": "Web browsing: news, sports & shopping", "5": "Launch Wireshark via system search", "6": "Resume Wireshark capture & flow analysis", "7": "Configure Wireshark IO graphs", "8": "View capture statistics", "9": "Explore & filter flow graphs", "10": "Analyze IO graphs & stats"};
+        const DATA = {"1": {"(5,)": 6, "(4,)": 6, "(0,)": 6, "(7,)": 5, "(10,)": 4, "(2,)": 3, "(8,)": 2, "(9,)": 2, "(3,)": 2, "(6,)": 2}, "2": {"(5, 10)": 3, "(0, 5)": 3, "(7, 4)": 3, "(5, 8)": 2, "(2, 4)": 2, "(4, 0)": 2, "(4, 5)": 2, "(4, 3)": 2}, "3": {"(4, 0, 5)": 2, "(4, 5, 10)": 2, "(7, 4, 5)": 2}, "4": {"(7, 4, 5, 10)": 2}};
+
+        // --- Data Processing ---
+        function parseData(data) {
+            const root = { name: "Sequences", children: [] };
+            const nodeMap = new Map();
+            nodeMap.set('root', root);
+
+            function findOrCreateNode(path, value) {
+                let currentParent = root;
+                for (let i = 0; i < path.length; i++) {
+                    const nodeId = path[i];
+                    const fullPathId = path.slice(0, i + 1).join(',');
+                    let childNode = nodeMap.get(fullPathId);
+                    if (!childNode) {
+                        const parentChildren = currentParent.children || (currentParent.children = []);
+                        childNode = {
+                            id: `${fullPathId}`,
+                            name: TITLES[nodeId] || `Unknown ID: ${nodeId}`,
+                            children: [],
+                            ...(i === path.length - 1 && { value: value })
+                        };
+                        parentChildren.push(childNode);
+                        nodeMap.set(fullPathId, childNode);
+                    }
+                    currentParent = childNode;
+                }
+            }
+
+            Object.keys(data).sort().forEach(level => {
+                const sequences = data[level];
+                for (const seqStr in sequences) {
+                    const value = sequences[seqStr];
+                    const path = seqStr.replace(/[()]/g, '').split(',').map(s => s.trim()).filter(Boolean).map(Number);
+                    if (path.length > 0) {
+                        findOrCreateNode(path, value);
+                    }
+                }
+            });
+            return root;
+        }
+
+        const hierarchicalData = parseData(DATA);
+
+        // --- D3 Visualization ---
+        const width = window.innerWidth * 0.9;
+        const height = window.innerHeight * 0.7;
+        const margin = { top: 150, right: 20, bottom: 80, left: 20 };
+
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
+
+        const treeLayout = d3.tree().size([innerWidth, innerHeight]);
+
+        const svg = d3.select("#graph-container").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .style("border-radius", "12px")
+            .style("background-color", "#2d3748");
+
+        const defs = svg.append("defs");
+        const filter = defs.append("filter")
+            .attr("id", "glow");
+        filter.append("feGaussianBlur")
+            .attr("stdDeviation", "3.5")
+            .attr("result", "coloredBlur");
+        const feMerge = filter.append("feMerge");
+        feMerge.append("feMergeNode").attr("in", "coloredBlur");
+        feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
+        const g = svg.append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 3])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+                d3.select("#zoom").property("value", event.transform.k);
+            });
+
+        svg.call(zoom);
+
+        const tooltip = d3.select(".tooltip");
+
+        function update(source) {
+            const root = d3.hierarchy(source, d => d.children);
+            treeLayout(root);
+            const nodes = root.descendants();
+            const links = root.links();
+
+            const link = g.selectAll(".link")
+                .data(links, d => d.target.data.id);
+
+            const linkGenerator = d3.linkVertical()
+                .x(d => d.x)
+                .y(d => innerHeight - d.y);
+
+            link.enter().append("path")
+                .attr("class", "link")
+                .attr("d", linkGenerator)
+                .merge(link)
+                .transition().duration(500)
+                .attr("d", linkGenerator);
+
+            link.exit().remove();
+            
+            const linkLabel = g.selectAll(".link-label")
+                .data(links, d => d.target.data.id);
+
+            linkLabel.enter().append("text")
+                .attr("class", "link-label")
+                .attr("dy", "0.31em")
+                .attr("text-anchor", "middle")
+                .text(d => d.target.data.value ? `x${d.target.data.value}` : "")
+                .merge(linkLabel)
+                .transition().duration(500)
+                .attr("x", d => d.source.x + (d.target.x - d.source.x) / 2)
+                .attr("y", d => innerHeight - (d.source.y + (d.target.y - d.source.y) / 2))
+                .text(d => d.target.data.value ? `x${d.target.data.value}` : "");
+
+            linkLabel.exit().remove();
+
+            const node = g.selectAll(".node")
+                .data(nodes, d => d.data.id || d.data.name);
+
+            const nodeEnter = node.enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.x},${innerHeight - d.y})`)
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(`<strong>${d.data.name}</strong>`)
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+
+                    const ancestors = d.ancestors();
+                    const ancestorIds = ancestors.map(a => a.data.id || a.data.name);
+
+                    g.selectAll(".node")
+                       .style("opacity", n => ancestorIds.includes(n.data.id || n.data.name) ? 1.0 : 0.2);
+                    
+                    g.selectAll(".link, .link-label")
+                        .style("opacity", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? 1.0 : 0.2);
+
+                    g.selectAll(".link")
+                        .style("stroke", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? "#63b3ed" : "#4a5568")
+                        .style("stroke-width", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? "2.5px" : "1.5px");
+                })
+                .on("mouseout", function() {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                    g.selectAll(".node, .link, .link-label").style("opacity", 1.0);
+                    g.selectAll(".link")
+                        .style("stroke", "#4a5568")
+                        .style("stroke-width", "1.5px");
+                });
+
+            nodeEnter.append("circle")
+                .attr("r", 8)
+                .attr("fill", d => d.depth === 0 ? '#4299e1' : (d.children ? "#a0aec0" : "#48bb78"));
+
+            nodeEnter.append("text")
+                .attr("dy", "0.31em")
+                .attr("text-anchor", d => !d.children && d.parent ? "start" : "middle")
+                .attr("transform", d => {
+                    if (!d.children && d.parent) {
+                        return "translate(12, -12) rotate(-60)";
+                    }
+                    if (d.depth === 0) {
+                        return "translate(0, 25)";
+                    }
+                    return "translate(0, 20)";
+                })
+                .text(d => d.data.name);
+
+            const nodeUpdate = nodeEnter.merge(node);
+
+            nodeUpdate.transition().duration(500)
+                .attr("transform", d => `translate(${d.x},${innerHeight - d.y})`);
+
+            node.exit().remove();
+        }
+
+        update(hierarchicalData);
+
+        d3.select("#zoom").on("input", function() {
+            const scale = +this.value;
+            const currentTransform = d3.zoomTransform(svg.node());
+            const newTransform = d3.zoomIdentity.translate(currentTransform.x, currentTransform.y).scale(scale);
+            svg.transition().duration(200).call(zoom.transform, newTransform);
+        });
+
+        d3.select("#reset-zoom").on("click", () => {
+            svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+            d3.select("#zoom").property("value", 1);
+        });
+
+    </script>
+</body>
+</html>
+    
