@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sequence Tree Graph (Enhanced)</title>
+    <title>Sequence Tree Graph</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,8 +12,8 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #1a202c;
-            color: #f7fafc;
+            background-color: #f8f9fa;
+            color: #212529;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -23,7 +23,7 @@
             overflow: hidden;
         }
         h1 {
-            color: #edf2f7;
+            color: #343a40;
             font-weight: 700;
             margin-bottom: 1rem;
         }
@@ -32,36 +32,38 @@
             text-align: center;
             padding: 8px 12px;
             font: 12px 'Inter', sans-serif;
-            background: rgba(26, 32, 44, 0.9);
-            border: 1px solid #4a5568;
-            color: #e2e8f0;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            color: #212529;
             border-radius: 8px;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.2s;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.15);
         }
         .node circle {
             cursor: pointer;
-            stroke: #4a5568;
-            stroke-width: 2px;
+            stroke: #adb5bd;
+            stroke-width: 1.5px;
             transition: all 0.3s ease;
         }
         .node:hover circle {
-            filter: url(#glow);
+            stroke: #007bff;
+            stroke-width: 2.5px;
         }
         .node text {
             font-size: 12px;
             font-weight: 500;
-            fill: #cbd5e0;
+            fill: #212529;
             paint-order: stroke;
-            stroke: #1a202c;
+            stroke: #f8f9fa;
             stroke-width: 3px;
             stroke-linecap: butt;
             stroke-linejoin: miter;
         }
         .link {
             fill: none;
-            stroke: #4a5568;
+            stroke: #ced4da;
             stroke-opacity: 0.8;
             stroke-width: 1.5px;
             transition: all 0.3s ease;
@@ -69,14 +71,14 @@
         .link-label {
             font-size: 11px;
             font-weight: 700;
-            fill: #e53e3e;
+            fill: #dc3545;
             paint-order: stroke;
-            stroke: #1a202c;
+            stroke: #f8f9fa;
             stroke-width: 4px;
         }
         #controls {
             margin-top: 20px;
-            background-color: #2d3748;
+            background-color: #ffffff;
             padding: 15px;
             border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -84,20 +86,20 @@
         #controls label {
             margin-right: 10px;
             font-weight: 500;
-            color: #e2e8f0;
+            color: #212529;
         }
         #controls button {
             margin-left: 10px;
             padding: 8px 16px;
             border: none;
-            background-color: #4299e1;
+            background-color: #007bff;
             color: white;
             border-radius: 8px;
             cursor: pointer;
             transition: background-color 0.2s;
         }
         #controls button:hover {
-            background-color: #3182ce;
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -172,17 +174,8 @@
             .attr("width", width)
             .attr("height", height)
             .style("border-radius", "12px")
-            .style("background-color", "#2d3748");
-
-        const defs = svg.append("defs");
-        const filter = defs.append("filter")
-            .attr("id", "glow");
-        filter.append("feGaussianBlur")
-            .attr("stdDeviation", "3.5")
-            .attr("result", "coloredBlur");
-        const feMerge = filter.append("feMerge");
-        feMerge.append("feMergeNode").attr("in", "coloredBlur");
-        feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+            .style("background-color", "#ffffff")
+            .style("box-shadow", "0 10px 15px -3px rgba(0,0,0,0.07), 0 4px 6px -2px rgba(0,0,0,0.05)");
 
         const g = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
@@ -258,20 +251,20 @@
                         .style("opacity", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? 1.0 : 0.2);
 
                     g.selectAll(".link")
-                        .style("stroke", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? "#63b3ed" : "#4a5568")
+                        .style("stroke", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? "#007bff" : "#ced4da")
                         .style("stroke-width", l => ancestors.includes(l.source) && ancestors.includes(l.target) ? "2.5px" : "1.5px");
                 })
                 .on("mouseout", function() {
                     tooltip.transition().duration(500).style("opacity", 0);
                     g.selectAll(".node, .link, .link-label").style("opacity", 1.0);
                     g.selectAll(".link")
-                        .style("stroke", "#4a5568")
+                        .style("stroke", "#ced4da")
                         .style("stroke-width", "1.5px");
                 });
 
             nodeEnter.append("circle")
                 .attr("r", 8)
-                .attr("fill", d => d.depth === 0 ? '#4299e1' : (d.children ? "#a0aec0" : "#48bb78"));
+                .attr("fill", d => d.depth === 0 ? '#007bff' : (d.children ? "#6c757d" : "#28a745"));
 
             nodeEnter.append("text")
                 .attr("dy", "0.31em")
